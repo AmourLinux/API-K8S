@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/typed/apps/v1"
 	"k8s.io/client-go/tools/clientcmd"
@@ -29,6 +30,7 @@ func init() {
 
 func main() {
 	http.HandleFunc("/apis/apps/v1/deployments/", WithBasicAuth(handleDeploy, "dev", "dev"))
+	//http.HandlerFunc("/apis/apps/v1/namespaces/{namespace}/deployments", )
 
 	//log.Fatal(http.ListenAndServe(":12380", nil))
 	log.Fatal(http.ListenAndServeTLS(":12380", "/Users/oker/.go-pki/api.pem", "/Users/oker/.go-pki/api-key.pem", nil))
@@ -99,8 +101,8 @@ func handleDeploy(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		panic(err)
 	}
-	//deploymentClient := clientSet.AppsV1().Deployments(apiv1.NamespaceDefault)
-	deploymentClient := clientSet.AppsV1().Deployments(deploy.Namespace)
+	deploymentClient := clientSet.AppsV1().Deployments("default")
+	//deploymentClient := clientSet.AppsV1().Deployments(deploy.Namespace)
 
 	log.Printf("Client method: %s\n", r.Method)
 
@@ -135,7 +137,7 @@ func handleDeploy(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			result, err = deploymentClient.Create(deploy)
 			if err != nil {
-				log.Println(err.Error())
+				log.Println("Error:", err.Error())
 				w.WriteHeader(http.StatusBadRequest)
 				w.Write([]byte(err.Error()))
 				r.Body.Close()
@@ -145,26 +147,29 @@ func handleDeploy(w http.ResponseWriter, r *http.Request) {
 		} else {
 			result, err = deploymentClient.Update(deploy)
 			if err != nil {
-				log.Println(err.Error())
+				log.Println("Error:", err.Error())
 				w.WriteHeader(http.StatusNotFound)
 				w.Write([]byte(err.Error()))
 				r.Body.Close()
 				return
-				//panic(err)
 			}
 			log.Println("Success update deploy: ", result)
 		}
 	case "PATCH":
-		//result, err = deploymentClient.Patch()
-
+		result, err = deploymentClient.Patch(deployName, types.PatchType(r.Header.Get("Content-Type")), data)
+		//result, err = deploymentClient.Patch(deployName, types.StrategicMergePatchType, data)
 		if err != nil {
-			panic(err)
+			log.Println("Error:", err.Error())
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte(err.Error()))
+			r.Body.Close()
+			return
 		}
 		log.Println("Success patch deploy: ", result)
 	case "DELETE":
 		err = deploymentClient.Delete(deploy.Name, &metav1.DeleteOptions{})
 		if err != nil {
-			log.Println(err.Error())
+			log.Println("Error:", err.Error())
 			w.WriteHeader(http.StatusNotFound)
 			w.Write([]byte(err.Error()))
 			r.Body.Close()
@@ -210,42 +215,42 @@ func createDeploy(deploymentClient v1.DeploymentInterface, deploy *appsv1.Deploy
 
 func tempPatch() {
 	/*
-		newDeploy := `{
-	    "kind": "Deployment",
-	    "apiVersion": "apps/v1",
-	    "metadata": {
-	        "name": "nginx",
-	        "namespace": "kube-system",
-	        "labels": {
-	            "run": "nginx"
-	        }
-	    },
-	    "spec": {
-	        "replicas": 1,
-	        "selector": {
-	            "matchLabels": {
-	                "run": "nginx"
-	            }
-	        },
-	        "template": {
-	            "metadata": {
-	                "labels": {
-	                    "run": "nginx"
-	                }
-	            },
-	            "spec": {
-	                "containers": [
-						{
-	                        "name": "nginx",
-	                        "image": "nginx:stable",
-	                        "imagePullPolicy": "IfNotPresent",
-	                    }
-	                ],
-	                "restartPolicy": "Always"
-	            }
-	        }
-	    }
-	}`
+			newDeploy := `{
+		    "kind": "Deployment",
+		    "apiVersion": "apps/v1",
+		    "metadata": {
+		        "name": "nginx",
+		        "namespace": "kube-system",
+		        "labels": {
+		            "run": "nginx"
+		        }
+		    },
+		    "spec": {
+		        "replicas": 1,
+		        "selector": {
+		            "matchLabels": {
+		                "run": "nginx"
+		            }
+		        },
+		        "template": {
+		            "metadata": {
+		                "labels": {
+		                    "run": "nginx"
+		                }
+		            },
+		            "spec": {
+		                "containers": [
+							{
+		                        "name": "nginx",
+		                        "image": "nginx:stable",
+		                        "imagePullPolicy": "IfNotPresent",
+		                    }
+		                ],
+		                "restartPolicy": "Always"
+		            }
+		        }
+		    }
+		}`
 	*/
 
 	// todo: try used patch API
